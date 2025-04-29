@@ -1,37 +1,70 @@
-const connection = require('./connection');
+require('dotenv').config();
+const { outFormat } = require('oracledb');
+const OracleDB = require('oracledb');
 
-const getAll = async () => {
-  const [tasks] = await connection.execute('SELECT * FROM tasks');
-  return tasks;
+try {
+  OracleDB.initOracleClient();
+} catch (err) {
+  console.error("Erro ao inicializar cliente Oracle:", err);
+}
+
+const dbConfig = {
+  user: "NEOCRED",
+  password: "N30CR3D",
+  connectString: `(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.8)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=WINT)))`
 };
 
-const createTask = async (task) => {
-  const { title } = task;
-  const dateUTC = new Date(Date.now()).toUTCString();
+const query = async (sql, params = []) => {
+  let connection;
+  try {
+    console.log("Configuração de conexão:", dbConfig);
 
-  const query = 'INSERT INTO tasks(title, status, created_at) VALUES (?, ?, ?)';
+    connection = await OracleDB.getConnection(dbConfig);
+    console.log('Conexão obtida com sucesso!');
 
-  const [createdTask] = await connection.execute(query, [title, 'pendente', dateUTC]);
-  return {insertId: createdTask.insertId};
+    const result = await connection.execute(sql, params, { outFormat: OracleDB.OUT_FORMAT_OBJECT });
+    console.log('Consulta executada com sucesso!', result);
+
+    const sqlUpper = sql.trim().toUpperCase();
+    
+    // Se a query for INSERT, UPDATE ou DELETE, precisa de commit
+    if (sqlUpper.startsWith("INSERT") || sqlUpper.startsWith("UPDATE") || sqlUpper.startsWith("DELETE")) {
+      await connection.commit();
+      console.log("Commit realizado com sucesso!");
+    }
+
+    if (sqlUpper.startsWith("SELECT")) {
+      if (!result.rows || result.rows.length === 0) {
+        console.warn('Nenhum dado encontrado.');
+        return { success: true, message: "Nenhum dado encontrado." };
+      }
+      return { success: true, data: result.rows };
+    } else if (sqlUpper.startsWith("INSERT")) {
+      return { success: true, message: `${result.rowsAffected || 0} registro(s) inserido(s).` };
+    } else if (sqlUpper.startsWith("UPDATE")) {
+      return { success: true, message: `${result.rowsAffected || 0} registro(s) atualizado(s).` };
+    } else if (sqlUpper.startsWith("DELETE")) {
+      return { success: true, message: `${result.rowsAffected || 0} registro(s) excluído(s).` };
+    } else {
+      return { success: true, message: "Operação executada com sucesso." };
+    }
+  } catch (err) {
+    console.error('Erro ao executar consulta:', err.message);
+    return { success: false, error: err.message };
+  } finally {
+    if (connection) {
+      try {
+        await connection.close();
+        console.log('Conexão fechada com sucesso.');
+      } catch (closeErr) {
+        console.error('Erro ao fechar conexão:', closeErr.message);
+      }
+    }
+  }
 };
 
-const deleteTask = async (id) => {
-  const [removedTask] = await connection.execute('DELETE FROM tasks WHERE id = ?', [id]);
-  return removedTask;
-};
 
-const updateTask = async (id, task) => {
-  const { title, status } = task;
-  
-  const query = 'UPDATE tasks SET title = ?, status = ? WHERE id = ?';
-
-  const [updatedTask] = await connection.execute(query, [title, status, id]);
-  return updatedTask;
-};
 
 module.exports = {
-  getAll,
-  createTask,
-  deleteTask,
-  updateTask,
+  query,
 };

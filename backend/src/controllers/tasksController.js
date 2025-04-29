@@ -1,32 +1,18 @@
 const tasksModel = require('../models/tasksModel');
 
-const getAll = async (_request, response) => {
-  const tasks = await tasksModel.getAll();
+const query = async (_request, response) => {
+  console.log('Executando a função query do controller');
+  console.log('Recebendo a query:', _request.body.query);
+  const { query } = _request.body;
+  console.log('Executando a query:', query);
+  //chama a função query do model passando a query
+  const tasks = await tasksModel.query(query);
+  console.log('Consulta executada com sucesso!');
+  console.log('Retornando os resultados:', tasks);
+  //retorna as tasks
   return response.status(200).json(tasks);
 };
 
-const createTask = async (request, response) => {
-  const createdTask = await tasksModel.createTask(request.body);
-  return response.status(201).json(createdTask);
-};
-
-const deleteTask = async (request, response) => {
-  const { id } = request.params;
-
-  await tasksModel.deleteTask(id);
-  return response.status(204).json();
-};
-
-const updateTask = async (request, response) => {
-  const { id } = request.params;
-
-  await tasksModel.updateTask(id, request.body);
-  return response.status(204).json();
-};
-
 module.exports = {
-  getAll,
-  createTask,
-  deleteTask,
-  updateTask,
+  query,
 };
